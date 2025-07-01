@@ -1,66 +1,95 @@
 #!/usr/bin/env python
-
+import json
 import sys
-from openai import OpenAI
+from http import client
+
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import docx2txt
 import PyPDF2
-import os
-from dotenv import load_dotenv
+
+def calculate_cosine_sim(resume, job_desc):
+    # Cosine Similarity Scoring
+    vectorizer = TfidfVectorizer(stop_words="english")
+    vectors = vectorizer.fit_transform([resume, job_desc])
+    cos_sim = cosine_similarity(vectors[0:1], vectors[1:2])[0][0] * 100
+    return cos_sim
+
+def call_ollama_api(url, model, prompt, temperature=0.0):
+    try:
+        conn = client.HTTPConnection(url)
+        headers = {
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "stream": False,  # Disable streaming to get full response
+            "temperature": temperature
+        }
+        conn.request("POST", "/api/chat", json.dumps(payload), headers)
+        response = conn.getresponse()
+        data = response.read().decode('utf-8')
+
+        # Parse the JSON response
+        response_json = json.loads(data)
+
+        # Extract the actual message content
+        if 'message' in response_json and 'content' in response_json['message']:
+            return response_json['message']['content']
+
+        return data
+
+    except (client.HTTPException, json.JSONDecodeError) as e:
+        print(f"Error connecting to Ollama API: {e}")
+        return None
 
 url="127.0.0.1:11434"
 model="qwen2.5-coder:7b"
 
 # Access the API key securely
-api_key = os.getenv("OPENAI_API_KEY")
-client = OpenAI(api_key=api_key)
-# Streamlit app UI
-print("=== 📄 ATS Resume Checker ===")
+#api_key = os.getenv("OPENAI_API_KEY")
+#client = OpenAI(api_key=api_key)
 
+
+print("=== 📄 ATS Resume Checker ===")
 uploaded_file = sys.argv[1]
 job_desc_file = sys.argv[2]
 resume = ""
 # Resume text extraction
 if uploaded_file:
-    if uploaded_file.name.endswith(".pdf"):
+    if uploaded_file.endswith(".pdf"):
         pdf_reader = PyPDF2.PdfReader(uploaded_file)
         for page in pdf_reader.pages:
             resume += page.extract_text() or ""
-    elif uploaded_file.name.endswith(".docx"):
+    elif uploaded_file.endswith(".docx"):
         resume = docx2txt.process(uploaded_file)
 # Main logic on button press
 with open(job_desc_file, "r") as f:
     job_desc = f.read()
 
-# Cosine Similarity Scoring
-vectorizer = TfidfVectorizer(stop_words="english")
-vectors = vectorizer.fit_transform([resume, job_desc])
-cos_sim = cosine_similarity(vectors[0:1], vectors[1:2])[0][0] * 100
+
+
+
+
+
+
 # GPT-4 Resume Evaluation Prompt
 prompt = (
     "Evaluate the following resume against the job description. "
     "Give a score out of 100, a short rationale, and improvement suggestions if any.\n\n"
     f"Resume:\n{resume}\n\nJob Description:\n{job_desc}"
 )
-# GPT-4 API Call
-response = client.chat.completions.create(
-    model=model,
-    messages=[{"role": "user", "content": prompt}],
-    temperature=0.3
-)
-evaluation = response.choices[0].message.content
-passed = cos_sim >= 60
+# Ollama API Call
+print("GPT-4 Evaluation in progress:")
+evaluation = call_ollama_api(url, model, prompt)
+
+
 # Output Section
-print("Results")
-print(f"Cosine Similarity Score: {cos_sim:.2f} %")
 print("**GPT-4 Evaluation:**")
 print(evaluation)
-print(f"### {'✅ PASS' if passed else '❌ FAIL'}")
-print("---")
 
 # Improved Resume Generator
-print("📝 Generate ATS-Optimized Resume")
 improve_prompt = f"""
 You are an expert resume coach and editor. Rewrite the following resume to be optimized for the job description below.
 - Incorporate missing skills, tools, or responsibilities based on the job.
@@ -72,11 +101,18 @@ Resume:
 Job Description:
 {job_desc}
 """
-improved_response = client.chat.completions.create(
-    model=model,
-    messages=[{"role": "user", "content": improve_prompt}],
-    temperature=0.4
-)
-improved_resume = improved_response.choices[0].message.content
-print("Improved Resume (ATS-Optimized)")
+improved_resume = evaluation = call_ollama_api(url, model, improve_prompt, temperature=0.4)
+
+print("*** Improved Resume (ATS-Optimized) ***")
 print(improved_resume)
+
+print("**Similarity check:**")
+cos_sim = calculate_cosine_sim(resume, job_desc)
+passed = cos_sim > 70
+cos_sim_improved = calculate_cosine_sim(improved_resume, job_desc)
+passed_improved = cos_sim_improved > 70
+
+print(f"Cosine Similarity Score (original): {cos_sim:.2f},   {'✅ PASS' if passed else '❌ FAIL'}")
+print(f"Cosine Similarity Score (improved): {cos_sim_improved:.2f},   {'✅ PASS' if passed_improved else '❌ FAIL'}")
+print("***\n")
+
