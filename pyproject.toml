@@ -1,0 +1,13 @@
+[project]
+name = "cvmatch"
+version = "0.1.0"
+description = "Check CV against job position requirements using LLM"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "docx2txt>=0.9",
+    "openai>=1.93.0",
+    "pypdf2>=3.0.1",
+    "python-dotenv>=1.1.1",
+    "scikit-learn>=1.7.0",
+]
