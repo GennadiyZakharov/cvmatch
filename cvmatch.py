@@ -1,6 +1,7 @@
 #!/usr/bin/env python
+
 import json
-import sys
+import argparse
 from http import client
 
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -47,14 +48,14 @@ def call_ollama_api(url, model, prompt, temperature=0.0):
 url="127.0.0.1:11434"
 model="qwen2.5-coder:7b"
 
-# Access the API key securely
-#api_key = os.getenv("OPENAI_API_KEY")
-#client = OpenAI(api_key=api_key)
+# Set up argument parser
+parser = argparse.ArgumentParser(description='ATS CV Checker - Compare your resume against a job description')
+parser.add_argument('resume_file', help='Path to your resume file (PDF or DOCX format)')
+parser.add_argument('job_description_file', help='Path to the job description text file')
+args = parser.parse_args()
 
-
-print("=== 📄 ATS Resume Checker ===")
-uploaded_file = sys.argv[1]
-job_desc_file = sys.argv[2]
+uploaded_file = args.resume_file
+job_desc_file = args.job_description_file
 resume = ""
 # Resume text extraction
 if uploaded_file:
@@ -68,12 +69,7 @@ if uploaded_file:
 with open(job_desc_file, "r") as f:
     job_desc = f.read()
 
-
-
-
-
-
-
+print("*** 📄 ATS CV Checker ***")
 # GPT-4 Resume Evaluation Prompt
 prompt = (
     "Evaluate the following resume against the job description. "
@@ -115,4 +111,3 @@ passed_improved = cos_sim_improved > 70
 print(f"Cosine Similarity Score (original): {cos_sim:.2f},   {'✅ PASS' if passed else '❌ FAIL'}")
 print(f"Cosine Similarity Score (improved): {cos_sim_improved:.2f},   {'✅ PASS' if passed_improved else '❌ FAIL'}")
 print("***\n")
-
