@@ -1,0 +1,8 @@
+Evaluate the following resume against the job description. 
+Give a score out of 100, a short rationale, and improvement suggestions if any.
+
+Resume:
+{resume}
+
+Job Description:
+{job_desc}
